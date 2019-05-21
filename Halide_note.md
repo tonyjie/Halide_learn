@@ -91,7 +91,7 @@ producer（内部Func）.compute_root() 使得内部Func会先存储，再被外
 
 这里的a.compute_at(b, c)理解为在b的c循环里插入a的计算
 producer.compute_at(consumer, y);   
-producer.store_root().computer_at(comsumer,y) 缓存所有数据  
+producer.store_root().compute_at(comsumer,y) 缓存所有数据  
 
 ### [9] Multi-pass Funcs, update definitions, reductions
 [func].trace_loads()  [func].trace_stores()可追踪load和store的情况  
@@ -99,7 +99,7 @@ RDom 似乎能完成循环迭代的功能, RDom(0,5)表示一个x从0到5（不�
 
 schedule update steps: 之前的schedule API只针对pure function（不包括后来的更新定义）。对于更新定义的调度：f.update(0).vectorize(x,4); f.update(1).parallel(y)...... 
 
-Consumer + producer + update: 基本是一样的操作 .computer_at     
+Consumer + producer + update: 基本是一样的操作 .compute_at     
 
 Halide.h 中有许多reduction helpers: 常用的有 sum(r+x) ,这个表达式其实自动创建了一个匿名Func。而Func f1 = sum(r+x) * 7，这个f1就是pure function      
 其他reduction helpers: maximum, minimum, argmin, argmax, mutiple    
@@ -108,6 +108,41 @@ Halide.h 中有许多reduction helpers: 常用的有 sum(r+x) ,这个表达式�
 利用compile_to_static_library()函数，可生成静态链接库和头文件。
 
 ### [11] 跨平台编译
+编译后执行不了？  已放弃（核心已转储）  
+通过[Func].compile_to_file()函数可以生成针对不同Target的object文件。Target通过参数输入该函数中。    
+
+### [12] Using the GPU
+在GPU上有一些特定的函数可以用来Schedule 
+
+### [13] Tuples 元组
+1. 可以通过Halide::select()函数实现 multi-value的Func。select()类似C的switch   
+2. Func数组实现多值函数
+3. 将Func定义为Tuple instead of Expr。Tuple的每一个表达式可以有不同的数据类型
+```
+Func multi_valued;
+multi_valued(x, y) = Tuple(x + y, sin(x * y)); //Can Also: multi_valued_2(x, y) = {x + y, sin(x*y)}
+Realization r = multi_valued.realize(80, 60);
+```
+Realization r相当于一个buffer向量对象，且每个buffer可以有不同的数据类型 
+
+调用时也需要以索引方式处理：
+```
+ Expr integer_part = multi_valued_2(x, y)[0];
+ Expr floating_part = multi_valued_2(x, y)[1];
+ Func consumer;
+ consumer(x, y) = {integer_part + 10, floating_part + 10.0f};
+```
+在RDom 约减操作中Tuple很好用    
+
+可以通过Tuple来帮助构建新的数据类型，例如复数   
+
+### [14] Halide Type System
+Expr也有Type。可通过cast函数转换Type    
+Func可以调用 [func].output_types()[0]得到其Type. 对于多值函数[0]换成[n] 
+Halide的类型转化规则:...... 
+Type的使用主要在于：
+
+
 
 
 
