@@ -35,7 +35,9 @@ class Rectangle: public Shape
 在派生类中重新定义此函数，要求函数名、函数类型、函数参数个数和类型全部与基类的虚函数相同，并根据派生类的需要重新定义函数体。  
 C++11 中的 override 关键字，可以显式的在派生类中声明，哪些成员函数需要被重写，如果没被重写，则编译器会报错。
 
-explicit关键字：防止类构造函数的隐式自动转换
+explicit关键字：防止类构造函数的隐式自动转换    
+
+R"name(string)name":实际作用等于string，只是在string很长时括起来加个名字
 
 # CodeGen_C::test()
 ## Argument -> LoweredArgument
