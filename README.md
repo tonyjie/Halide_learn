@@ -1,3 +1,11 @@
+# Running CodeGen_C
+在Halide/test下有internal.cpp文件，包含各种测试函数的调用。通过
+```
+g++ internal.cpp -std=c++11 -I ../src -L ../bin -lHalide -lpthread -ldl -o internal
+./internal
+```
+跑了一遍代码，当然自己只显示xxx test passed
+
 # some knowledge for C++
 头文件加入 #ifndef/#define/#endif 防止重复编译出错的问题。  
 格式： 
