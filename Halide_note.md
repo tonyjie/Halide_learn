@@ -140,9 +140,57 @@ Realization r相当于一个buffer向量对象，且每个buffer可以有不同�
 Expr也有Type。可通过cast函数转换Type    
 Func可以调用 [func].output_types()[0]得到其Type. 对于多值函数[0]换成[n] 
 Halide的类型转化规则:...... 
-Type的使用主要在于：
+Type的使用主要在于：可以在程序中runtime改变Type，可以当做一个变量来测试的感觉   
 
+### [15] Generators 生成器 (没太搞懂,最后该怎么执行？)
+通过继承Halide::Generator<...>得到Generator类，实现自己定义的pipeline   
+GeneratorParam<...> xxx 来定义生成器变量，这会影响Halide pipeline   
+自适应地选择一个合适的因子进行向量化：
+```
+output.vectorize(x, natural_vector_size(output.type()));
+```
+注册Generator:  
+```
+HALIDE_REGISTER_GENERATOR(MySecondGenerator, my_second_generator)
+```
+Conclusion: 结构化生成器编写格式
+```
+class MyGenerator : public Halide::Generator<MyGenerator>
+{
+    Input a, b; //...
+    Output c, d; //...
+    GeneratorParam<T> ...
 
+    void generate()
+    {
+
+    }
+};
+HALIDE_REGIRTER_GENERATOR(MyGenerator, my_generator)
+```
+
+#### 生成Generator可执行文件后，实现编译
+```
+./lesson_15_generate \
+    -g my_first_generator \
+    -f my_first_generator_win32 \
+    -o . \
+    target=x86-32-windows
+```
+-g:生成器名，-o:目录, -f:制定生成的函数名, target:指定编译的目标平台, -e 生成的文件的类型   
+
+若Generator带参数：(在runtime设置)
+```
+/lesson_15_generate -g my_second_generator -f my_second_generator_1 -o . \
+target=host parallel=false scale=3.0 rotation=ccw output.type=uint16
+```
+
+### [16] RGB images and memory layouts
+[15]的应用：Param设置为不同的memory Layout. 根据不同的Memory Layout适合不同的schedule   
+[Func].specialize([condition])可以通过runtime的设定来调整[Func]的schedule   
+set_stride(), set_extent()  
+
+### [17] Reductions over non-rectangular domains 提供一个在任意限定条件区域运算的表达方式
 
 
 
