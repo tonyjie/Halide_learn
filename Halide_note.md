@@ -191,6 +191,25 @@ target=host parallel=false scale=3.0 rotation=ccw output.type=uint16
 set_stride(), set_extent()  
 
 ### [17] Reductions over non-rectangular domains 提供一个在任意限定条件区域运算的表达方式
+[9]中的RDom只能是矩形区域，如果想在自定区域中迭代需要RDom::where    
+```
+RDom r(0,7,0,7) %区域需要包含之后的自定区域
+r.where((r.x - 3)*(r.x - 3) + (r.y - 3)*(r.y - 3) <= 10);
+circle(r.x, r.y) *= 2;
+Buffer<int> halide_result = circle.realize(7, 7);
+```
+区域的限制不止可以通过r.x,r.y来约束，也可以通过与其相关的[Func]：
+```
+Func f("f"), g("g");
+Var x("x"), y("y");
+f(x, y) = 2 * x + y;
+g(x, y) = x + y;
+
+RDom r1(0, 5, 0, 5);
+r1.where(f(r1.x, r1.y) >= 4);
+r1.where(f(r1.x, r1.y) <= 7);
+f(r1.x, r1.y) /= 10;
+```
 
 
 
