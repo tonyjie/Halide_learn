@@ -185,7 +185,7 @@ HALIDE_REGIRTER_GENERATOR(MyGenerator, my_generator)
 target=host parallel=false scale=3.0 rotation=ccw output.type=uint16
 ```
 
-### [16] RGB images and memory layouts
+### [16] RGB images and memory layouts: 没有运行成功
 [15]的应用：Param设置为不同的memory Layout. 根据不同的Memory Layout适合不同的schedule   
 [Func].specialize([condition])可以通过runtime的设定来调整[Func]的schedule   
 set_stride(), set_extent()  
@@ -210,7 +210,24 @@ r1.where(f(r1.x, r1.y) >= 4);
 r1.where(f(r1.x, r1.y) <= 7);
 f(r1.x, r1.y) /= 10;
 ```
+### [18] Factoring an associative reduction using rfactor
+rfactor将有依赖更新区域分解成一系列的小切片，对小切片分别进行处理后，将所有结果汇总起来，得到整体的结果 
+```
+Func intermediate = histogram.update().rfactor({{rx_outer, u}, {ry_outer, v}});
+```
 
+### [19] Wrapper Funcs 包裹函数
+关于使用Func::in和ImageParam::in     
+在f和g之间插入一个新的函数，插入的新函数可以单独调度    
+```
+Func f_in_g = f.in(g);
+f_in_g.compute_root();
+```
+
+### [20] Cloning Funcs 克隆方程
+Func::clone_in对函数进行克隆，且克隆可以单独调度    
+
+### [21] Auto-Scheduler 自动调度器
 
 
 
