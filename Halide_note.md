@@ -74,7 +74,7 @@ gradient.parallel(tile_index);
 //     .parallel(tile_index);   
 
 ### [6]在指定区域上执行函数
-Buffer<int> shifted(5,7)
+Buffer\<int> shifted(5,7)
 shifted.set_min(100,50) //指定计算区域的起始坐标（左上角）
 gradient.realize(shifted)
 
@@ -83,7 +83,7 @@ gradient.realize(shifted)
 采用Expr clamped_x = clamp(x,0,input.width()-1) ； Expr clamped_y = clamp(y,0,input.height()-1) clamped(x,y,c) = input(clamped_x,clamped_y,c)；
 
 Func之间可以套用，表示逐个使用  
-[Func2] = cast<uint8_t>([Func1](x,y,c))
+[Func2] = cast\<uint8_t>([Func1](x,y,c))
 
 ### [8] 多阶段流水线调度
 default：两个Func套接，实际上只会调用内部的Func，不会存储 -- inline schedule  

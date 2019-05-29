@@ -39,6 +39,22 @@ explicit关键字：防止类构造函数的隐式自动转换
 
 R"name(string)name":实际作用等于string，只是在string很长时括起来加个名字   
 
+常引用：const 类型标识符 &引用名=目标变量名; 例如 const int &ra=a;  
+用这种方式声明的引用，不能通过引用对目标变量的值进行修改,从而使引用的目标成为const
+
+mutable 关键字：被mutable修饰的变量，将永远处于可变的状态，即使在一个const函数中。  
+
+## 智能指针
+对普通的指针进行封装，使得智能指针实质上是一个对象，行为表现得却像一个指针  
+作用：防止忘记调用delete释放内存和程序异常的进入catch块忘记释放内存，可以解决指针释放时机的问题；把值语义转换成引用语义 
+
+头文件 memory 中, 有shared_ptr, unique_ptr, weak_ptr
+### shared_ptr    
+shared_ptr多个指针指向相同的对象。shared_ptr使用引用计数，每一个shared_ptr的拷贝都指向相同的内存。每使用他一次，内部的引用计数加1，每析构一次，内部的引用计数减1，减为0时，自动删除所指向的堆内存。shared_ptr内部的引用计数是线程安全的，但是对象的读取需要加锁。   
+智能指针类将一个计数器与类指向的对象相关联，引用计数跟踪该类有多少个对象共享同一指针。  
+use_count()：检查shared_ptr对象的引用计数；这个值是shared_ptr指向的对象的引用次数，即如果两个shared_ptr指向同一对象，这两个shared_ptr.use_count()输出的值相等   
+
+
 ### Something About C Compile
 .a:静态库 .so:动态库 .o:目标文件 .out:可执行文件 
 
@@ -97,6 +113,29 @@ A halide module. This represents IR containing lowered function definitions and 
 
 Module(const std::string &name, const Target &target);  
 Target:目标架构：OS, Arch, 
+
+Internal::IntrusivePrt<Internal::ModuleContents> contents;  
+
+### IntrusivePtr.h
+侵入式指针，智能指针。似乎有点东西...
+
+### 初始化函数：Module::Module(name,target):
+new了一个contents，contents->name = name; contents->target = target;    
+
+
+
+
+### void append(const Internal::LoweredFunc &function)
+contents->functions.push_back(funtion); 
+contents->functions是contents指的一个vector，类型为LoweredFunc。这里在这个向量后push进新的function  
+ 
+
+### ModuleContents
+结构体，记录了ref_count, name, auto_shcedule, buffers, functions, submodules, external_code, metadata_name_map  
+
+
+
+
 
 ### LoweredFunc
 (string name, std::vector<LoweredArgument> args, Stmt body, LinkageType linkage)
