@@ -65,8 +65,29 @@ this指针是所有成员函数的隐含参数，在成员函数内部，this指
 ### extern "C"
 提示编译器按照C的规则去翻译相应的函数名而不是按C++的
 
+### name mangling 命名粉碎（命名重整）
+C++可以实现方法重载，即同函数名加不同类型参数就可以实现不同功能。这种技术对于编译器来说是通过name mangling实现的：在这种技术中，编译器通过把原方法名称与其参数相结合产生一个独特的内部名字来取代原方法名称。
+
 ### Something About C Compile
 .a:静态库 .so:动态库 .o:目标文件 .out:可执行文件 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -100,7 +121,10 @@ A fragment of Halide syntax. It's implemented as reference-counted handle to a c
 IRHandle(const IRNode *p)
 
 ### IR.h: Add/Cast/Sub ... -> ExprNode -> BaseExprNode -> IRNode
-reference count是啥
+IRNode: We use the visitor pattern to traverse IR nodes throughout the compiler, so we have a virtual accept method which accepts visitors. 
+包含一个mutable RefCount ref_count: 应该是用于记录该IRNode对象被多少个指针指向。    
+rtti: run-time type identification? 是什么意思? 
+
 
 #### Expr Add::make(Expr a, Expr b)
 函数返回值为一个Expr：其实就是一个指向结构体Add的指针，并给结构体Add的成员赋值：a和b为相加的两项（两个Expr),type与a.type相同（也与b.type相同），即int,float...等  
@@ -112,9 +136,23 @@ reference count是啥
 mutate？    
 
 ### Store -> StmtNode -> BaseStmtNode -> IRNode
-#### Stmt Store::make()
+store a 'value' to the buffer called 'name' at a given 'index' if 'predicate' is true. 
 
-### Stmt LetStmt::make(name, Expr value, Stmt body)
+#### Stmt Store::make(const std::string &name, Expr value, Expr index,Parameter param, Expr predicate, ModulusRemainder alignment)
+
+
+
+
+
+### LetStmt -> StmtNode -> BaseStmtNode -> IRNode
+The statement form of a let node. Within the statement 'body', instances of the Var named 'name' refer to 'value'   
+
+
+
+#### Stmt LetStmt::make(name, Expr value, Stmt body)
+返回一个
+
+
 
 ......
 
@@ -127,7 +165,7 @@ A halide module. This represents IR containing lowered function definitions and 
 Module(const std::string &name, const Target &target);  
 Target:目标架构：OS, Arch, 
 
-Internal::IntrusivePrt<Internal::ModuleContents> contents;contents是一个ModuleContents类型的智能指针      
+Internal::IntrusivePtr<Internal::ModuleContents> contents;contents是一个ModuleContents类型的智能指针      
 
 ### IntrusivePtr.h
 侵入式指针，智能指针,与shared_ptr类似（但还不清楚区别在哪，似乎就是IntrusivePtr需要自己写一些代码来记录引用次数）   
@@ -142,13 +180,23 @@ contents->functions是contents指的一个vector，类型为LoweredFunc。这里
  
 
 ### ModuleContents
-结构体，记录了ref_count, name, auto_shcedule, buffers, functions, submodules, external_code, metadata_name_map  
+结构体，记录了ref_count, name, auto_schedule, buffers, functions, submodules, external_code, metadata_name_map  
 
 ### LoweredFunc
 (string name, std::vector<LoweredArgument> args, Stmt body, LinkageType linkage)
 对应于CodeGen_C::test()中的LoweredFunc("test1", args, s, LinkageType::External) 其中s为经过了很多次make的Stmt，args为vector<LoweredArgument>    
 
 初始化函数：把name, Stmt body, linkage, name_mangling都赋值了，args向量中的每个LoweredArgument被push_back到对象对应的成员中（也是一个vector）   
+
+LinkageType linkage 是什么？
+
+
+
+
+
+
+
+
 
 
 
@@ -187,10 +235,46 @@ void IRPrinter::visit(const Add *op) {
     stream << ')';
 }
 ```
-即输出 (Expr a + Ex[r b])
+即输出 (Expr a + Expr b)
 
 ## IRVisitor
 a base class for algorithms that need to recursively walk over the IR.  
+### 各种visit函数
+为虚函数。其中有些没有内容，有些包含这种语句：
+```
+op->a.accept(this);
+op->b.accept(this);
+```
+op->a 和 op->b为Expr -> IRHandle -> IntrusivePtr, op(Add)为ExprNode -> BaseExprNode -> IRNode   
+
+#### IRHandle::accept(IRVisitor *v) const {ptr -> accept(v);}
+Dispatch to the correct visitor method for this node. E.g. if this node is actually an Add node, then this will call IRVisitor::visit(const Add *)  
+按照注释说明的意思应该是：用于给这个节点调度正确的visitor method：如果是op是Add node就调用Add对应的visitor函数  
+查看其definition发现是IRNode的accept纯虚函数    
+accept的定义可以在ExprNode和StmtNode类的成员函数中找到：调用v->visit(this)  
+```
+template<> void ExprNode<IntImm>::accept(IRVisitor *v) const { v->visit((const IntImm *)this); }
+```
+ 
+
+
+### IRGraphVisitor -> IRVisitor
+A base class for algorithms that walk recursively over the IR without visiting the same node twice. This is for passes that are capable of interpreting the IR as a DAG instead of a tree.  
+(暂时没有看到哪个引用了这个类)  
+visit函数只是包含了两个include函数
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -208,4 +292,83 @@ CodeGen_C::CodeGen_C(ostream &s, Target t, OutputKind output_kind, const std::st
 Emit the declarations contained in the module as C code 
 compile(const Module &module)   
 
+前面TypeInfoGatherer的一通操作没有看懂，gpu什么的...... 
+大概是：
+f.body是Stmt类的对象，Stmt -> IRHandle -> IntrusivePtr  
+defined()是IntrusivePtr的函数，查看指针是否定义。   
+accept()是IRHandle的函数，但如前所述没搞懂是在干嘛  
 
+f.args: LoweredArgument组成的向量   
+forward_declare_type_if_needed(arg.type):
+If the Type is a handle type, emit a forward-declaration for it if we haven't already.
+
+如果不是header头文件的话：
+    emit external-code blobs that are C++   
+    add_vector_typedefs(type_info.vector_types_used)
+
+    ExternalCallPrototypes e ......... 根据e有没有xxx declarations，调用一些函数，如set_name_mangling_mode(...) 还没有看懂  
+
+```
+for (const auto &b : input.buffers()) {
+    compile(b);
+}
+for (const auto &f : input.functions()) {
+    compile(f);
+}
+```
+input是Module. 在test()中的Module似乎没有input.buffer()，只有input.functions    
+
+### CodeGen_C::compile(const LowerFunc &f)
+#### user_context
+```
+have_user_context = false;
+for (size_t i = 0; i < args.size(); i++) {
+    // TODO: check that its type is void *?
+    have_user_context |= (args[i].name == "__user_context");
+}
+```
+|=：位操作运算符，a|=b 等同于 a = a|b，按位或   
+按照test()中的 args = { buffer_arg, float_arg, int_arg, user_context_arg }， 似乎have_user_context -> 0001 ??猜测   
+
+#### name mangling
+NameMangling类：enum class:{Default, C, CPlusPlus}  
+分别对应{Match whatever is specified in the Target; No name mangling; C++ name mangling},默认为Default    
+
+set_name_mangling_mode(name_mangling);  
+似乎就是输入一些ifdef之类的东西 
+
+#### namespaces
+simple_name = extract_namespaces(f.name, namespaces); test()中的simple_name应该就是test1    
+test()中的f.name = "test1"  
+
+#### Emit the function prototype
+先根据args列出 int test1()函数的参数    
+print:关于__user_context的一个声明，不清楚__user_context是干嘛的？  
+
+### print(f.body)
+```
+print(f.body)
+```   
+
+f.body是Stmt类的对象    
+
+这里print函数为
+```
+void IRPrinter::print(Stmt ir) {
+    ir.accept(this);
+}
+```
+即f.body.accept(IRPrinter&), 相当于IRPrinter.visit(f.body)
+
+具体是怎么visit的？
+需要看Stmt通过make的组织形式是怎样的...
+
+
+
+
+
+
+
+
+
+然后直接就 return 0了，大部分工作都是在print(f.body)完成的  
