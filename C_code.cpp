@@ -60,7 +60,9 @@ int test1(struct halide_buffer_t *_buf_buffer, float _alpha, int32_t _beta, void
 }  // extern "C"
 #endif
 
-/*
+
+
+
 void CodeGen_C::test() {
     LoweredArgument buffer_arg("buf", Argument::OutputBuffer, Int(32), 3, ArgumentEstimates{});
     LoweredArgument float_arg("alpha", Argument::InputScalar, Float(32), 0, ArgumentEstimates{});
@@ -88,4 +90,3 @@ void CodeGen_C::test() {
         CodeGen_C cg(source, Target("host"), CodeGen_C::CImplementation);
         cg.compile(m);
     }
-*/

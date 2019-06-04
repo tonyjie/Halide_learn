@@ -358,11 +358,156 @@ void IRPrinter::print(Stmt ir) {
     ir.accept(this);
 }
 ```
-即f.body.accept(IRPrinter&), 相当于IRPrinter.visit(f.body)
+但是是IRPrinter的继承类CodeGen_C调用
+即f.body.accept(CodeGen_C&), 相当于CodeGen_C::visit(f.body)
 
 具体是怎么visit的？
 需要看Stmt通过make的组织形式是怎样的...
 
+从后往前看：
+
+#### Call::make(Handle(),Call::buffer_get_host,{buf},Call::Extern)
+函数定义：  
+static Expr make(Type type, const std::string &name, const std::vector<Expr> &args, CallType call_type, FunctionPtr func = FunctionPtr(), int value_index = 0, Buffer<> image = Buffer<>(), Parameter param = Parameter());
+
+其中Call::buffer_get_host = "_halide_buffer_get_host"   
+
+这一句visit()会得到 _halide_buffer_get_host(_buf_buffer)  
+这里本身括号里是输出Expr buf，但是buf由Variable::make生成，名字是buf.buffer(好像通过某种方式把.变成_,同时名字前加一个_) 
+
+#### LetStmt::make("buf", Call::make(Handle(), Call::buffer_get_host, {buf}, Call::Extern), s)
+LetStmt::make 返回的是一个Stmt，是一个指向LetStmt结构体的指针
+函数定义：  
+Stmt LetStmt::make(const std::string &name, Expr value, Stmt body)
+```
+void CodeGen_C::visit(const LetStmt *op) {
+    string id_value = print_expr(op->value);
+    Stmt body = op->body;
+    if (op->value.type().is_handle()) {
+        // The body might contain a Load or Store that references this
+        // directly by name, so we can't rewrite the name.
+        do_indent();
+        stream << print_type(op->value.type())
+               << " " << print_name(op->name)
+               << " = " << id_value << ";\n";
+    } else {
+        Expr new_var = Variable::make(op->value.type(), id_value);
+        body = substitute(op->name, new_var, body);
+    }
+    body.accept(this);
+}
+```
+这里应该是进入了else中的部分，生成了临时新Var的名字，替换了原来的。然后这个过程还被body记录，调用accept应该就能通过visit打印出来这一段：void *_0 = ...; void * _buf = _0;
+
+Q: IRMutator的作用还不太清楚？就是用来作这种替换么？    
+
+
+#### Allocate::make("tmp.heap", Int(32), MemoryType::Heap, {43, beta}, const_true(), s);
+```
+static Stmt make(const std::string &name, Type type, MemoryType memory_type,
+                const std::vector<Expr> &extents,
+                Expr condition, Stmt body,
+                Expr new_expr = Expr(), const std::string &free_function = std::string());
+```
+
+CodeGen_C::visit(const Allocate *op)    
+第一个判断语句中进入else：
+调用了两次print_assignment(); size_id = _2  
+open_scope和close_scope指 { 和 }    
+之后再调用halide_malloc (size_id = _3)
+... 
+op->body.accept(this) 这句话调用了前面其他的Stmt相应的visit函数 
+最后close_scope
+
+#### Block::make(s, Free::make("tmp.stack"))
+结构体Free只有一个成员name  
+CodeGen_C::visit(const Free *op)应该是完成一些对于allocations的操作     
+
+Scope<Allocation> allocations   
+
+这里应该没有打印什么东西
+
+#### Allocate::make("tmp.stack", Int(32), MemoryType::Stack, {127}, const_true(), s)
+```
+static Stmt make(const std::string &name, Type type, MemoryType memory_type,
+                const std::vector<Expr> &extents,
+                Expr condition, Stmt body,
+                Expr new_expr = Expr(), const std::string &free_function = std::string());
+```
+对应 int32_t _tmp_stack[127];
+
+#### Block::make(s, Free::make("tmp.stack"))
+同上 Block::make
+
+#### LetStmt::make("x", beta+1, s)
+对应 int32_t _4 = _beta + 1;
+
+#### Store::make("buf", e, x, Parameter(), const_true(), ModulusRemainder());、
+函数定义：
+```
+static Stmt make(const std::string &name, Expr value, Expr index,
+                Parameter param, Expr predicate, ModulusRemainder alignment);
+```
+Store a 'value' to the buffer called 'name' at a given 'index' if 'predicate' is true. The buffer is interpreted as an array of the same type as 'value'. The name may be the name of an enclosing Allocate node, an output buffer, or any other symbol of type Handle().
+
+Store的visit函数在调用过程中先有 
+```
+string id_value = print_expr(op_value);
+```
+其中print_expr中就调用了op_value的accept函数，即开始visit Expr e = Select::make(alpha > 4.0f, print_when(x < 1, 3), 2);     
+调用完毕后有 ((int32_t *)_buf)[_4] = _13;
+
+#### Select::make(alpha > 4.0f, print_when(x < 1, 3), 2)
+Expr Select::make(Expr condition, Expr true_value, Expr false_value)
+
+```
+void CodeGen_C::visit(const Select *op) {
+    ostringstream rhs;
+    string type = print_type(op->type);
+    string true_val = print_expr(op->true_value);
+    string false_val = print_expr(op->false_value);
+    string cond = print_expr(op->condition);
+
+    // clang doesn't support the ternary operator on OpenCL style vectors.
+    // See: https://bugs.llvm.org/show_bug.cgi?id=33103
+    if (op->condition.type().is_scalar()) {
+        rhs << "(" << type << ")"
+            << "(" << cond
+            << " ? " << true_val
+            << " : " << false_val
+            << ")";
+    } else {
+        rhs << type << "::select(" << cond << ", " << true_val << ", " << false_val << ")";
+    }
+    print_assignment(op->type, rhs.str());
+}
+```
+先print_when(),对应于C_code的
+```
+   int32_t _5;
+   bool _6 = _4 < 1;
+   if (_6)
+   {
+    char b0[1024];
+    snprintf(b0, 1024, "%lld%s", (long long)(3), "\n");
+    char const *_7 = b0;
+    int32_t _8 = halide_print(_ucon, _7);
+    int32_t _9 = return_second(_8, 3);
+    _5 = _9;
+   } // if _6
+   else
+   {
+    _5 = 3;
+   } // if _6 else
+```
+再print_expr(op->condition)  (因为op->false_value=2,为一个数，没有特别的visit函数)  
+对应于：
+```
+float _11 = float_from_bits(1082130432 /* 4 */);
+bool _12 = _alpha > _11;
+```
+最后rhs被赋予(... ? ... : ...)的形式    
+通过print_assignment()得到 int32_t _13 = (int32_t)(_12 ? _10 : 2);  
 
 
 
