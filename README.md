@@ -17,6 +17,9 @@ g++ internal.cpp -std=c++11 -I ../src -L ../bin -lHalide -lpthread -ldl -o inter
 ```
 每个头文件的<标示>应该是唯一的，命名规则一般是头文件名全大写，并把文件名中的"."也变成下划线 
 
+### 匿名namespace
+与static类似，匿名namespace内的变量只能在这个文件内访问，其他文件无法通过extern访问到   
+
 ### 嵌套的命名空间
 ```
 namespace ns1{
